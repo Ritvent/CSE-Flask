@@ -183,5 +183,102 @@ def create_hero():
             'error': str(e)
         }), 500
 
+# PUT UPDATE hero 
+@app.route('/api/heroes/<int:hero_id>', methods=['PUT'])
+def update_hero(hero_id):
+    try:
+        # Get JSON data from request
+        data = request.get_json()
+        
+        # Check if data is empty, none or false
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
+        
+        # First, check if hero record exists
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM hero WHERE hero_id = %s", (hero_id,))
+        hero = cur.fetchone()
+        
+        if not hero:
+            cur.close()
+            return jsonify({
+                'success': False,
+                'error': 'Hero not found'
+            }), 404
+        
+        # Get values from JSON,optional fields
+        hero_name = data.get('hero_name')
+        attack_type = data.get('attack_type')
+        attribute_id = data.get('attribute_id')
+        role_id = data.get('role_id')
+        
+        # Validate lengths if provided
+        if hero_name and len(hero_name) > 50:
+            cur.close()
+            return jsonify({
+                'success': False,
+                'error': 'hero_name must be 50 characters or less'
+            }), 400
+        
+        if attack_type and len(attack_type) > 10:
+            cur.close()
+            return jsonify({
+                'success': False,
+                'error': 'attack_type must be 10 characters or less'
+            }), 400
+        
+        # Build dynamic UPDATE query
+        # Only update fields that were provided
+        update_fields = []
+        params = []
+        
+        if hero_name:
+            update_fields.append("hero_name = %s")
+            params.append(hero_name)
+        
+        if attack_type:
+            update_fields.append("attack_type = %s")
+            params.append(attack_type)
+        
+        if attribute_id is not None:
+            update_fields.append("ATTRIBUTE_attribute_id = %s")
+            params.append(attribute_id)
+        
+        if role_id is not None:
+            update_fields.append("ROLE_role_id = %s")
+            params.append(role_id)
+        
+        # Check if at least one field to update
+        if not update_fields:
+            cur.close()
+            return jsonify({
+                'success': False,
+                'error': 'No fields to update'
+            }), 400
+          
+        params.append(hero_id)
+
+        query = f"UPDATE hero SET {', '.join(update_fields)} WHERE hero_id = %s"
+        cur.execute(query, params)
+        
+        # Commit to db
+        mysql.connection.commit()
+        cur.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Hero updated successfully',
+            'hero_id': hero_id
+        }), 200
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    
 if __name__ == '__main__':
     app.run(debug=True)
