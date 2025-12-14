@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request, make_response
 from flask_mysqldb import MySQL
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from config import Config
 from dicttoxml import dicttoxml
 
@@ -8,6 +9,8 @@ app.config.from_object(Config)
 
 
 mysql = MySQL(app)
+
+jwt = JWTManager(app)
 
 def format_response(data, status_code=200):
     # Format JSON or XML
@@ -31,14 +34,55 @@ def index():
     })
 
 # 200 OK, 201 CREATED
-# 404 NOT FOUND, 400 BAD REQUEST
+# 404 NOT FOUND, 400 BAD REQUEST, 405 NOT ALLOWED
 # 500 Internal Server Error
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    try:
+        # Get username and password from request
+        data = request.get_json()
+        
+        if not data:
+            return format_response({
+                'success': False,
+                'error': 'No data provided'
+            }, 400)
+        
+        username = data.get('testusername')
+        password = data.get('testpassword')
+        
+        # Validate required fields
+        if not username or not password:
+            return format_response({
+                'success': False,
+                'error': 'Username and password are required'
+            }, 400)
+        
+        
+        access_token = create_access_token(identity=username)
+        
+        return format_response({
+            'success': True,
+            'message': 'Login successful',
+            'access_token': access_token,
+            'username': username
+        }, 200)
+    
+    except Exception as e:
+        return format_response({
+            'success': False,
+            'error': str(e)
+        }, 500)
+
 
 
 # GET heroes endpoint with search
 @app.route('/api/heroes', methods=['GET'])
+@jwt_required() 
 def get_heroes():
     try:
+        current_user = get_jwt_identity()
         # Get search parameters from URL
         search_name = request.args.get('hero_name')
         search_attack = request.args.get('attack_type')
@@ -106,19 +150,23 @@ def get_heroes():
                 'attack_type': search_attack,
                 'attribute_id': search_attribute,
                 'role_id': search_role
-            }
-        }), 200
+            },
+            'authenticated_user': current_user
+        }, 200)
     
     except Exception as e:
         return format_response({
             'success': False,
             'error': str(e) # display error message
-        }), 500
+        }, 500)
     
 # GET single hero by ID
 @app.route('/api/heroes/<int:hero_id>' , methods=['GET'])
+@jwt_required()
 def get_hero(hero_id):
     try:
+        current_user = get_jwt_identity()
+        
         cur = mysql.connection.cursor()
         # SQL query to get ONE hero by ID
         cur.execute("""
@@ -138,7 +186,7 @@ def get_hero(hero_id):
             return format_response({
                 'success': False,
                 'error': 'Hero not found'
-            }), 404  # 404 = Not Found
+            }, 404)  # 404 = Not Found
         
         # Convert to dictionary
         hero_data = {
@@ -155,19 +203,21 @@ def get_hero(hero_id):
         return format_response({
             'success': True,
             'data': hero_data
-        }), 200
+        }, 200)
     
     except Exception as e:
         return format_response({
             'success': False,
             'error': str(e)
-        }), 500
+        }, 500)
     
 # POST Create new hero
 # Body: {"hero_name": "testname", "attack_type": "Melee/Ranged", "attribute_id": 1, "role_id": 2}
 @app.route('/api/heroes', methods=['POST'])
+@jwt_required()
 def create_hero():
     try:
+        current_user = get_jwt_identity()
         # Get JSON data from request body
         data = request.get_json()
         
@@ -176,7 +226,7 @@ def create_hero():
             return format_response({
                 'success': False,
                 'error': 'No data provided'
-            }), 400 
+            }, 400) 
         
         # Get values from JSON
         hero_name = data.get('hero_name')
@@ -189,21 +239,21 @@ def create_hero():
             return format_response({
                 'success': False,
                 'error': 'hero_name and attack_type are required'
-            }), 400
+            }, 400)
         
         # Validate hero name length, max 50
         if len(hero_name) > 50:
             return format_response({
                 'success': False,
                 'error': 'hero_name must be 50 characters or less'
-            }), 400
+            }, 400)
         
         # Ranged/Melee max 6
         if len(attack_type) > 10:
             return format_response({
                 'success': False,
                 'error': 'attack_type must be 45 characters or less'
-            }), 400
+            }, 400)
         
         # Insert into database
         cur = mysql.connection.cursor()
@@ -229,19 +279,22 @@ def create_hero():
                 'attack_type': attack_type,
                 'attribute_id': attribute_id,
                 'role_id': role_id
-            }
-        }), 201  # CREATED
+            },
+            'created_by': current_user
+        }, 201)  # CREATED
     
     except Exception as e:
         return format_response({
             'success': False,
             'error': str(e)
-        }), 500
+        }, 500)
 
 # PUT UPDATE hero 
 @app.route('/api/heroes/<int:hero_id>', methods=['PUT'])
+@jwt_required()
 def update_hero(hero_id):
     try:
+        current_user = get_jwt_identity()
         # Get JSON data from request
         data = request.get_json()
         
@@ -250,7 +303,7 @@ def update_hero(hero_id):
             return format_response({
                 'success': False,
                 'error': 'No data provided'
-            }), 400
+            }, 400)
         
         # First, check if hero record exists
         cur = mysql.connection.cursor()
@@ -262,7 +315,7 @@ def update_hero(hero_id):
             return format_response({
                 'success': False,
                 'error': 'Hero not found'
-            }), 404
+            }, 404)
         
         # Get values from JSON,optional fields
         hero_name = data.get('hero_name')
@@ -276,14 +329,14 @@ def update_hero(hero_id):
             return format_response({
                 'success': False,
                 'error': 'hero_name must be 50 characters or less'
-            }), 400
+            }, 400)
         
         if attack_type and len(attack_type) > 10:
             cur.close()
             return format_response({
                 'success': False,
                 'error': 'attack_type must be 10 characters or less'
-            }), 400
+            }, 400)
         
         # Build dynamic UPDATE query
         # Only update fields that were provided
@@ -312,7 +365,7 @@ def update_hero(hero_id):
             return format_response({
                 'success': False,
                 'error': 'No fields to update'
-            }), 400
+            }, 400)
           
         params.append(hero_id)
 
@@ -326,18 +379,22 @@ def update_hero(hero_id):
         return format_response({
             'success': True,
             'message': 'Hero updated successfully',
-            'hero_id': hero_id
-        }), 200
+            'hero_id': hero_id,
+            'updated_by': current_user
+        }, 200)
     
     except Exception as e:
         return format_response({
             'success': False,
             'error': str(e)
-        }), 500
+        }, 500)
     
 @app.route('/api/heroes/<int:hero_id>', methods=['DELETE'])
+@jwt_required()
 def delete_hero(hero_id):
     try:
+        current_user = get_jwt_identity()
+        
         cur = mysql.connection.cursor()
         
         # First, check if hero record exists
@@ -349,7 +406,7 @@ def delete_hero(hero_id):
             return format_response({
                 'success': False,
                 'error': 'Hero not found'
-            }), 404
+            }, 404)
         
         # Delete hero
         cur.execute("DELETE FROM hero WHERE hero_id = %s", (hero_id,))
@@ -359,14 +416,15 @@ def delete_hero(hero_id):
         return format_response({
             'success': True,
             'message': 'Hero deleted successfully',
-            'hero_id': hero_id
-        }), 200
+            'hero_id': hero_id,
+            'deleted_by': current_user
+        }, 200)
     
     except Exception as e:
         return format_response({
             'success': False,
             'error': str(e)
-        }), 500
+        }, 500)
 
 if __name__ == '__main__':
     app.run(debug=True)
