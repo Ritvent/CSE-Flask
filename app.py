@@ -280,5 +280,38 @@ def update_hero(hero_id):
             'error': str(e)
         }), 500
     
+@app.route('/api/heroes/<int:hero_id>', methods=['DELETE'])
+def delete_hero(hero_id):
+    try:
+        cur = mysql.connection.cursor()
+        
+        # First, check if hero record exists
+        cur.execute("SELECT * FROM hero WHERE hero_id = %s", (hero_id,))
+        hero = cur.fetchone()
+        
+        if not hero:
+            cur.close()
+            return jsonify({
+                'success': False,
+                'error': 'Hero not found'
+            }), 404
+        
+        # Delete hero
+        cur.execute("DELETE FROM hero WHERE hero_id = %s", (hero_id,))
+        mysql.connection.commit()
+        cur.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Hero deleted successfully',
+            'hero_id': hero_id
+        }), 200
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
     app.run(debug=True)
