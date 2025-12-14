@@ -1,6 +1,7 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 from flask_mysqldb import MySQL
 from config import Config
+from dicttoxml import dicttoxml
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -8,9 +9,23 @@ app.config.from_object(Config)
 
 mysql = MySQL(app)
 
+def format_response(data, status_code=200):
+    # Format JSON or XML
+    format_type = request.args.get('format', 'json').lower()
+    
+    if format_type == 'xml':
+        #  To XML
+        xml_data = dicttoxml(data, custom_root='response', attr_type=False)
+        response = make_response(xml_data, status_code)
+        response.headers['Content-Type'] = 'application/xml'
+        return response
+    else:
+        #  To JSON
+        return jsonify(data), status_code
+
 @app.route('/') # home
 def index():
-    return jsonify({
+    return format_response({
         'message': 'Testing!',
         'database': 'finaldbcselec'
     })
@@ -82,7 +97,7 @@ def get_heroes():
                 'role_name': hero[6] if len(hero) > 6 else None
             })
         
-        return jsonify({
+        return format_response({
             'success': True,
             'count': len(heroes_list),
             'data': heroes_list,
@@ -95,7 +110,7 @@ def get_heroes():
         }), 200
     
     except Exception as e:
-        return jsonify({
+        return format_response({
             'success': False,
             'error': str(e) # display error message
         }), 500
@@ -120,7 +135,7 @@ def get_hero(hero_id):
         
         # If hero not found handling
         if not hero:
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'Hero not found'
             }), 404  # 404 = Not Found
@@ -137,13 +152,13 @@ def get_hero(hero_id):
         }
         
         # Return success response
-        return jsonify({
+        return format_response({
             'success': True,
             'data': hero_data
         }), 200
     
     except Exception as e:
-        return jsonify({
+        return format_response({
             'success': False,
             'error': str(e)
         }), 500
@@ -158,7 +173,7 @@ def create_hero():
         
         # Check if data is empty, none or false
         if not data:
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'No data provided'
             }), 400 
@@ -171,21 +186,21 @@ def create_hero():
         
         # Validate required fields
         if not hero_name or not attack_type:
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'hero_name and attack_type are required'
             }), 400
         
         # Validate hero name length, max 50
         if len(hero_name) > 50:
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'hero_name must be 50 characters or less'
             }), 400
         
         # Ranged/Melee max 6
         if len(attack_type) > 10:
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'attack_type must be 45 characters or less'
             }), 400
@@ -205,7 +220,7 @@ def create_hero():
         cur.close()
         
         # Return success response
-        return jsonify({
+        return format_response({
             'success': True,
             'message': 'Hero created successfully',
             'data': {
@@ -218,7 +233,7 @@ def create_hero():
         }), 201  # CREATED
     
     except Exception as e:
-        return jsonify({
+        return format_response({
             'success': False,
             'error': str(e)
         }), 500
@@ -232,7 +247,7 @@ def update_hero(hero_id):
         
         # Check if data is empty, none or false
         if not data:
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'No data provided'
             }), 400
@@ -244,7 +259,7 @@ def update_hero(hero_id):
         
         if not hero:
             cur.close()
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'Hero not found'
             }), 404
@@ -258,14 +273,14 @@ def update_hero(hero_id):
         # Validate lengths if provided
         if hero_name and len(hero_name) > 50:
             cur.close()
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'hero_name must be 50 characters or less'
             }), 400
         
         if attack_type and len(attack_type) > 10:
             cur.close()
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'attack_type must be 10 characters or less'
             }), 400
@@ -294,7 +309,7 @@ def update_hero(hero_id):
         # Check if at least one field to update
         if not update_fields:
             cur.close()
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'No fields to update'
             }), 400
@@ -308,14 +323,14 @@ def update_hero(hero_id):
         mysql.connection.commit()
         cur.close()
         
-        return jsonify({
+        return format_response({
             'success': True,
             'message': 'Hero updated successfully',
             'hero_id': hero_id
         }), 200
     
     except Exception as e:
-        return jsonify({
+        return format_response({
             'success': False,
             'error': str(e)
         }), 500
@@ -331,7 +346,7 @@ def delete_hero(hero_id):
         
         if not hero:
             cur.close()
-            return jsonify({
+            return format_response({
                 'success': False,
                 'error': 'Hero not found'
             }), 404
@@ -341,14 +356,14 @@ def delete_hero(hero_id):
         mysql.connection.commit()
         cur.close()
         
-        return jsonify({
+        return format_response({
             'success': True,
             'message': 'Hero deleted successfully',
             'hero_id': hero_id
         }), 200
     
     except Exception as e:
-        return jsonify({
+        return format_response({
             'success': False,
             'error': str(e)
         }), 500
