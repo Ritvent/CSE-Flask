@@ -34,7 +34,7 @@ def index():
     })
 
 # 200 OK, 201 CREATED
-# 404 NOT FOUND, 400 BAD REQUEST, 405 NOT ALLOWED
+# 404 NOT FOUND, 400 BAD REQUEST, 405 NOT ALLOWED, 422 UNPROCESSABLE ENTITY, 401 UNAUTHORIZED
 # 500 Internal Server Error
 
 @app.route('/api/login', methods=['POST'])
