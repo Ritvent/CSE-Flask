@@ -20,17 +20,51 @@ def index():
 # 500 Internal Server Error
 
 
-# GET heroes endpoint
+# GET heroes endpoint with search
 @app.route('/api/heroes', methods=['GET'])
 def get_heroes():
     try:
+        # Get search parameters from URL
+        search_name = request.args.get('hero_name')
+        search_attack = request.args.get('attack_type')
+        search_attribute = request.args.get('attribute_id')
+        search_role = request.args.get('role_id')
+        
         cur = mysql.connection.cursor()
-        cur.execute("""
+        
+        # Build dynamic query based on search parameters
+        query = """
             SELECT h.*, a.attribute_type, r.role_name 
             FROM hero h
             LEFT JOIN attribute a ON h.ATTRIBUTE_attribute_id = a.attribute_id
             LEFT JOIN role r ON h.ROLE_role_id = r.role_id
-        """)
+            WHERE 1=1
+        """
+        params = []
+        
+        # Add search conditions if provided
+        if search_name:
+            query += " AND h.hero_name LIKE %s"
+            params.append(f"%{search_name}%")  # % = wildcard for partial match
+        
+        if search_attack:
+            query += " AND h.attack_type LIKE %s"
+            params.append(f"%{search_attack}%")
+        
+        if search_attribute:
+            query += " AND h.ATTRIBUTE_attribute_id = %s"
+            params.append(search_attribute)
+        
+        if search_role:
+            query += " AND h.ROLE_role_id = %s"
+            params.append(search_role)
+        
+        # Execute query with or without parameters
+        if params:
+            cur.execute(query, params)
+        else:
+            cur.execute(query)
+        
         # heroes = fetched result
         heroes = cur.fetchall()
         cur.close()
@@ -51,7 +85,13 @@ def get_heroes():
         return jsonify({
             'success': True,
             'count': len(heroes_list),
-            'data': heroes_list
+            'data': heroes_list,
+            'search_filters': {
+                'hero_name': search_name,
+                'attack_type': search_attack,
+                'attribute_id': search_attribute,
+                'role_id': search_role
+            }
         }), 200
     
     except Exception as e:
